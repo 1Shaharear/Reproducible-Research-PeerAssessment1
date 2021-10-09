@@ -1,0 +1,218 @@
+---
+title: 'Reproducible Research: Peer Assessment 1'
+author: "EP"
+date: "6 Oktober 2021"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Loading and preprocessing the data
+
+1. Loading required libraries for cleaning and managing the data
+
+```{r, error=FALSE, warning=FALSE, message=FALSE}
+library(dplyr)
+library(ggplot2)
+library(RColorBrewer)
+library(lubridate)
+library(gridExtra)
+library(chron)
+```
+
+
+2. Downloading the data. First we check if we have the file already in our working directory. If not we download it.
+
+
+```{r}
+if(!file.exists("Factivity")){
+  fileURL <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip"
+  download.file(fileURL, "Factivity")
+  unzip("Factivity") 
+  activity <- read.csv("activity.csv")
+  activity <- data.fram?(activity)
+}
+
+if(file.exists("Factivity")){
+  activity <- read.csv("activity.csv")
+  activity <- data.frame(activity)
+}
+```
+
+
+3. Getting an idea of the data. With the summary we realize that we have 2304 NA´s
+
+
+```{r}
+head(activity)
+summary(activity)
+str(activity)
+```
+
+
+4. Processing the data. Changing the class from our data frame to be able to use it correctly.
+
+
+```{r}
+activity[,"interval"] <- as.factor(activity[,"interval"])
+activity[,"date"] <- ymd(activity[,"date"])
+```
+
+
+ <font size="10"> Question 1: What is mean total number of steps taken per day?</font> 
+ 
+
+For this part of the assignment, you can ignore the missing values in the dataset.
+
+1. Calculate the total number of steps taken per day
+2. If you do not understand the difference between a histogram and a barplot, research the difference between them. Make a histogram of the total number of steps taken each day
+3. Calculate and report the mean and median of the total number of steps taken per day.
+
+```{r, warning=FALSE}
+stepsDay <- aggregate(steps ~ date, activity, sum)
+stepsDay %>%
+  ggplot(aes(x = steps, fill = "Steps")) +
+  geom_histogram(size = 2, bins=5) +
+  labs(title = "Total steps per day", subtitle = "From 02 of Oct to 29 Nov") +
+  ylab("Steps") +
+  xlab("Count") +
+  theme_classic() +
+  scale_fill_brewer(palette = "Set2") +
+  guides(fill=FALSE)
+
+mean(stepsDay$steps)
+median(stepsDay$steps)
+```
+
+
+<font size="10">Question 2 What is the average daily activity pattern? </font>
+
+
+1. Make a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis).
+
+
+```{r}
+intervalSteps <- aggregate(steps ~ interval, activity, FUN=sum)
+plot(intervalSteps$interval, intervalSteps$steps, 
+     type = "l", lwd = 1,
+     xlab = "Interval", 
+     ylab = "Steps",
+     color="blue",
+     main = "Steps / 5-Minute Interval")
+```
+
+
+2.Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?
+
+
+```{r}
+intervalSteps[which.max(intervalSteps$steps),]
+```
+
+
+<font size="10">Imputing missing values </font>
+
+
+1. Calculate and report the total number of missing values in the dataset (i.e. the total number of rows with \color{red}{?verb|NA|}NAs)
+
+
+```{r}
+summary(activity)
+table(is.na(activity))
+```
+
+
+2. Devise a strategy for filling in all of the missing values in the dataset. The strategy does not need to be sophisticated. For example, you could use the mean/median for that day, or the mean for that 5-minute interval, etc.
+
+
+```{r}
+
+activityNA <- activity
+DateMeanSteps <- aggregate(steps~interval,data=activity,FUN=mean,na.action=na.omit)
+activityNA$CompleteSteps <- ifelse(is.na(activityNA$steps), 
+                             round(DateMeanSteps$steps[match(activityNA$interval, DateMeanSteps$interval)],0),
+                             activityNA$steps)
+```
+
+
+3. Create a new dataset that is equal to the original dataset but with the missing data filled in.
+
+```{r}
+activityNA <- data.frame(steps=activityNA$CompleteSteps, interval=activityNA$interval, date=activityNA$date)
+summary(activityNA)
+```
+
+
+4. Make a histogram of the total number of steps taken each day and Calculate and report the mean and median total number of steps taken per day. Do these values differ from the estimates from the first part of the assignment? What is the impact of imputing missing data on the estimates of the total daily number of steps?
+
+
+```{r, warning=FALSE}
+stepsDay <- aggregate(steps ~ date, activity, sum)
+stepsDayNA <- aggregate(steps ~ date, activityNA, sum)
+
+require(gridExtra)
+plot1 <- stepsDay %>%
+  ggplot(aes(x = steps, fill = "Steps")) +
+  geom_histogram(size = 2, bins=5) +
+  labs(title = "Total steps per day", subtitle = "Raw Database") +
+  ylab("Steps") +
+  xlab("Coun?") +
+  ylim(c(0,40)) +
+  theme_classic() +
+  scale_fill_brewer(palette = "Set2") +
+  guides(fill=FALSE)
+plot2 <- stepsDayNA %>%
+  ggplot(aes(x = steps, fill = "Steps")) +
+  geom_histogram(size = 2, bins=5) +
+  labs(title = "Total steps per day", subtitle =?"New Database NA = Mean(interval)") +
+  ylab("Steps") +
+  xlab("Count") +
+  ylim(c(0,40)) +
+  theme_classic() +
+  scale_fill_brewer(palette = "Set1") +
+  guides(fill=FALSE)
+grid.arrange(plot1, plot2, ncol=2)
+
+mean(stepsDay$steps)
+mean(stepsDayNA$steps)
+
+median(stepsDay$steps)
+median(stepsDayNA$steps)
+```
+
+
+<font size="10">Are there differences in activity patterns between weekdays and weekends? </font>
+
+
+1. Create a new factor variable in the dataset with two levels - "weekday" and "weekend" indicating whether a given date is a weekday or weekend day.
+
+
+```{r}
+activityNA$TypeDay <- ifelse(is.weekend(activityNA$date), "weekend", "weekday")
+table(activityNA$TypeDay)
+activityNA$TypeDay <- as.factor(activityNA$TypeDay)
+summary(activityNA)
+```
+
+
+2. Make a panel plot containing a time serie? plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis). See the README file in the GitHub repository to see an example of what this plot should look like us?ng simulated data.
+
+
+```{r}
+meanintervalNA<- aggregate(steps ~ interval + TypeDay, activityNA, FUN=mean)
+meanintervalNA$interval <- as.integer(meanintervalNA$interval)
+head(meanintervalNA)
+ggplot(meanintervalNA, aes(x=interval, y=steps)) + 
+  geom_line(color="green", size=1) + 
+  facet_wrap(~TypeDay, nrow=2) +
+  labs(x="\nInterval", y="\nSteps") +
+  theme_classic()
+```
+
+
+
+
